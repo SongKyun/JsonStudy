@@ -1,24 +1,26 @@
 #include "JsonPawn.h"
 #include "JsonUtilities.h"
+#include "ShapeActor.h"
+#include "Http.h"
 
 AJsonPawn::AJsonPawn()
 {
-	PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bCanEverTick = true;
 }
 
 void AJsonPawn::BeginPlay()
 {
-	Super::BeginPlay();
+    Super::BeginPlay();
 }
 
 void AJsonPawn::Tick(float DeltaTime)
 {
-	Super::Tick(DeltaTime);
+    Super::Tick(DeltaTime);
 }
 
 void AJsonPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
+    Super::SetupPlayerInputComponent(PlayerInputComponent);
 }
 
 void AJsonPawn::DataToJsonExample()
@@ -88,12 +90,11 @@ void AJsonPawn::DataToJsonExample()
 
 void AJsonPawn::JsonToDataExample()
 {
-    FString jsonString = TEXT("{\"name\":\"SeSAC_9\",\"age\":12,\"height\":215.5,
-        \"weight\":95.699996948242188,\"gender\":true,\"favoriteFood\":[\"김치찌개\",\"스팸\",\"삼겹살\"]}");
-    
+    FString jsonString = TEXT("{\"name\":\"SeSAC_9\",\"age\":12,\"height\":215.5,\"weight\":95.699996948242188,\"gender\":true,\"favoriteFood\":[\"김치찌개\",\"스팸\",\"삼겹살\"]}");
+
     // FJsonObjectConverter 이용해서 Json을 FUserInfo 변수에 셋팅
     FJsonObjectConverter::JsonObjectStringToUStruct(jsonString, &userInfo);
-    
+
     // FString(json 형태) ---> JsonObject ---> Data
     TSharedRef<TJsonReader<>> jsonReader = TJsonReaderFactory<>::Create(jsonString);
     TSharedPtr<FJsonObject> jsonObject;
@@ -110,4 +111,243 @@ void AJsonPawn::JsonToDataExample()
     {
         userInfo2.favoriteFood.Add(jsonArray[i]->AsString());
     }
+}
+
+void AJsonPawn::CreateShape()
+{
+    FVector pos = GetRandLocation();
+    FRotator rot = GetRandRotation();
+    FVector scale = FVector(FMath::RandRange(0.5f, 3.0f));
+    int32 randType = FMath::RandRange(0, 2);
+
+    CreateShape(randType, pos, rot, scale);
+}
+
+void AJsonPawn::CreateShape(int32 type, FVector pos, FRotator rot, FVector scale)
+{
+    AShapeActor* shape = GetWorld()->SpawnActor<AShapeActor>(shapeFactory[type]);
+    shape->SetActorLocation(pos);
+    shape->SetActorRotation(rot);
+    shape->SetActorScale3D(scale);
+    shape->type = type;
+
+    allShape.Add(shape);
+}
+
+void AJsonPawn::SaveData()
+{
+    // allShape 의 있는 모양의
+    // 위치, 회전, 스케일, type 을 Json 형태로 바꾸자.
+
+    /*TArray<FShapeInfo> array;
+    for (int32 i = 0; i < allShape.Num(); i++)
+    {
+        FShapeInfo shape;
+        shape.pos = allShape[i]->GetActorLocation();
+        shape.rot = allShape[i]->GetActorRotation();
+        shape.scale = allShape[i]->GetActorScale3D();
+        shape.type = allShape[i]->type;
+        array.Add(shape);
+    }
+
+    FShapeInfoArray info;
+    info.data = array;
+    FString jsonString;
+    FJsonObjectConverter::UStructToJsonObjectString(
+        FShapeInfoArray::StaticStruct(),
+        &info,
+        jsonString
+    );*/
+
+    TArray<TSharedPtr<FJsonValue>> jsonArray;
+    for (int32 i = 0; i < allShape.Num(); i++)
+    {
+        TSharedPtr<FJsonObject> jsonObject = MakeShared<FJsonObject>();
+        // 위치
+        jsonObject->SetNumberField(TEXT("pos_x"), allShape[i]->GetActorLocation().X);
+        jsonObject->SetNumberField(TEXT("pos_y"), allShape[i]->GetActorLocation().Y);
+        jsonObject->SetNumberField(TEXT("pos_z"), allShape[i]->GetActorLocation().Z);
+        // 회전
+        jsonObject->SetNumberField(TEXT("rot_pitch"), allShape[i]->GetActorRotation().Pitch);
+        jsonObject->SetNumberField(TEXT("rot_yaw"), allShape[i]->GetActorRotation().Yaw);
+        jsonObject->SetNumberField(TEXT("rot_roll"), allShape[i]->GetActorRotation().Roll);
+        // 크기
+        jsonObject->SetNumberField(TEXT("scale"), allShape[i]->GetActorScale3D().X);
+        // 모양
+        jsonObject->SetNumberField(TEXT("type"), allShape[i]->type);
+
+        TSharedPtr<FJsonValueObject> valueObj = MakeShared<FJsonValueObject>(jsonObject);
+        jsonArray.Add(valueObj);
+    }
+
+    // jsonArray 를 FString 변환
+    FString jsonString;
+    TSharedRef<TJsonWriter<>> jsonWriter = TJsonWriterFactory<>::Create(&jsonString);
+    FJsonSerializer::Serialize(jsonArray, jsonWriter);
+    UE_LOG(LogTemp, Warning, TEXT("%s"), *jsonString);
+
+    // jsonString 을 text file 로 저장하자
+    FString path = FPaths::ProjectDir() + TEXT("text.txt");
+    FFileHelper::SaveStringToFile(jsonString, *path);
+}
+
+void AJsonPawn::LoadData()
+{
+    FString path = FPaths::ProjectDir() + TEXT("text.txt");
+    FString jsonString;
+    FFileHelper::LoadFileToString(jsonString, *path);
+
+    /*FShapeInfoArray info;
+    FJsonObjectConverter::JsonObjectStringToUStruct(jsonString, &info);
+
+    for (int32 i = 0; i < info.data.Num(); i++)
+    {
+        FShapeInfo shape = info.data[i];
+        CreateShape(shape.type, shape.pos, shape.rot, shape.scale);
+    }*/
+
+    // 데이터를 지역변수로 만들어서 사용해버리니까 구조체가 필요없는 구조
+    TSharedRef<TJsonReader<>> jsonReader = TJsonReaderFactory<>::Create(jsonString);
+    TArray<TSharedPtr<FJsonValue>> jsonArray;
+    FJsonSerializer::Deserialize(jsonReader, jsonArray);
+
+    for (int32 i = 0; i < jsonArray.Num(); i++)
+    {
+        TSharedPtr<FJsonObject> jsonObject = jsonArray[i]->AsObject();
+
+        FVector pos;
+        pos.X = jsonObject->GetNumberField(TEXT("pos_x"));
+        pos.Y = jsonObject->GetNumberField(TEXT("pos_y"));
+        pos.Z = jsonObject->GetNumberField(TEXT("pos_z"));
+
+        FRotator rot;
+        rot.Pitch = jsonObject->GetNumberField(TEXT("rot_pitch"));
+        rot.Yaw = jsonObject->GetNumberField(TEXT("rot_yaw"));
+        rot.Roll = jsonObject->GetNumberField(TEXT("rot_roll"));
+
+        float scaleValue = jsonObject->GetNumberField(TEXT("scale"));
+        FVector scale = FVector(scaleValue);
+
+        int32 type = jsonObject->GetNumberField(TEXT("type"));
+
+        CreateShape(type, pos, rot, scale);
+    }
+}
+
+FVector AJsonPawn::GetRandLocation()
+{
+    FVector pos;
+    pos.X = FMath::RandRange(-500.0f, 500.0f);
+    pos.Y = FMath::RandRange(-500.0f, 500.0f);
+    pos.Z = FMath::RandRange(-500.0f, 500.0f);
+    return pos;
+}
+
+FRotator AJsonPawn::GetRandRotation()
+{
+    FRotator rot;
+    rot.Pitch = FMath::RandRange(0.0f, 360.0f);
+    rot.Yaw = FMath::RandRange(0.0f, 360.0f);
+    rot.Roll = FMath::RandRange(0.0f, 360.0f);
+
+    return rot;
+}
+
+void AJsonPawn::HttpRequestGet()
+{
+    // 서버에게 요청하는 객체 만들자.
+    FHttpRequestRef httpRequest = FHttpModule::Get().CreateRequest();
+    // 요청 URL - 서버가 만들어서 알려줌.
+    httpRequest->SetURL(TEXT("https://jsonplaceholder.typicode.com/posts"));
+    // 요청 방식 설정 - 서버에 GET, POST, PUT, DELETE 어떤것으로 해야하는지 알려줌
+    httpRequest->SetVerb(TEXT("GET"));
+    // 헤더를 설정 
+    httpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+    // 서버에서 응답이 오면 호출되는 함수 등록
+    httpRequest->OnProcessRequestComplete().BindLambda([this](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully) {
+        // 응답 오는 곳
+        if (bConnectedSuccessfully)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("%s"), *Response->GetContentAsString());
+            FString jsonString = Response->GetContentAsString();
+            jsonString = FString::Printf(TEXT("{\"data\":%s}"), *jsonString);
+
+            FPostInfoArray info;
+            FJsonObjectConverter::JsonObjectStringToUStruct(jsonString, &info);
+            allPost = info.data;
+        }
+        else
+        {
+            //Response->GetResponseCode() : 200 정상,    400번대, 500번대 오류
+            UE_LOG(LogTemp, Warning, TEXT("통신 실패 : %d"), Response->GetResponseCode());
+        }
+        }
+    );
+
+    // 요청을 보내자.
+    httpRequest->ProcessRequest();
+}
+
+void AJsonPawn::HttpRequestPost()
+{
+    // 서버에게 요청하는 객체 만들자.
+    FHttpRequestRef httpRequest = FHttpModule::Get().CreateRequest();
+    // 요청 URL - 서버가 만들어서 알려줌.
+    httpRequest->SetURL(TEXT("https://jsonplaceholder.typicode.com/posts"));
+    // 요청 방식 설정 - 서버에 GET, POST, PUT, DELETE 어떤것으로 해야하는지 알려줌
+    httpRequest->SetVerb(TEXT("POST"));
+    // 헤더를 설정 
+    httpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+
+    // 서버에게 보내고 싶은 데이값 (Json)
+    httpRequest->SetContentAsString(TEXT("Json 형태의 문자열을 만들어서 셋팅"));
+
+    // 서버에서 응답이 오면 호출되는 함수 등록
+    httpRequest->OnProcessRequestComplete().BindLambda([this](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully) {
+        // 응답 오는 곳
+        if (bConnectedSuccessfully)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("%s"), *Response->GetContentAsString());
+
+        }
+        else
+        {
+            //Response->GetResponseCode() : 200 정상,    400번대, 500번대 오류
+            UE_LOG(LogTemp, Warning, TEXT("통신 실패 : %d"), Response->GetResponseCode());
+        }
+        }
+    );
+
+    // 요청을 보내자.
+    httpRequest->ProcessRequest();
+}
+
+void AJsonPawn::HttpRequestImageDownload()
+{
+    // 서버에게 요청하는 객체 만들자.
+    FHttpRequestRef httpRequest = FHttpModule::Get().CreateRequest();
+    // 요청 URL - 서버가 만들어서 알려줌.
+    httpRequest->SetURL(TEXT("https://ssl.pstatic.net/melona/libs/1482/1482857/2e170a50469c9f109ad3_20241202173623747.jpg"));
+    // 요청 방식 설정 - 서버에 GET, POST, PUT, DELETE 어떤것으로 해야하는지 알려줌
+    httpRequest->SetVerb(TEXT("GET"));
+    // 서버에서 응답이 오면 호출되는 함수 등록
+    httpRequest->OnProcessRequestComplete().BindLambda([this](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully) {
+        // 응답 오는 곳
+        if (bConnectedSuccessfully)
+        {
+            // jsonString 을 text file 로 저장하자
+            FString path = FPaths::ProjectDir() + TEXT("image.jpg");
+            TArray<uint8> array = Response->GetContent();
+            FFileHelper::SaveArrayToFile(array, *path);
+        }
+        else
+        {
+            //Response->GetResponseCode() : 200 정상,    400번대, 500번대 오류
+            UE_LOG(LogTemp, Warning, TEXT("통신 실패 : %d"), Response->GetResponseCode());
+        }
+        }
+    );
+
+    // 요청을 보내자.
+    httpRequest->ProcessRequest();
 }
