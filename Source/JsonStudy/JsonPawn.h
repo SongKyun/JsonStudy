@@ -142,4 +142,10 @@ public:
 
     UPROPERTY(VisibleAnywhere)
     TArray<FPostInfo> allPost;
+
+    UPROPERTY(EditDefaultsOnly)
+    TSubclassOf<class UMainUI> mainUIFactory;
+    
+    UPROPERTY()
+    class UMainUI* mainUI;
 };

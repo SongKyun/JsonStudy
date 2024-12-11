@@ -2,6 +2,7 @@
 #include "JsonUtilities.h"
 #include "ShapeActor.h"
 #include "Http.h"
+#include "MainUI.h"
 
 AJsonPawn::AJsonPawn()
 {
@@ -11,6 +12,9 @@ AJsonPawn::AJsonPawn()
 void AJsonPawn::BeginPlay()
 {
     Super::BeginPlay();
+
+    mainUI = CreateWidget<UMainUI>(GetWorld(), mainUIFactory);
+    mainUI->AddToViewport();
 }
 
 void AJsonPawn::Tick(float DeltaTime)
