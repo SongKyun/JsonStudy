@@ -262,7 +262,7 @@ void AJsonPawn::HttpRequestGet()
     // 서버에게 요청하는 객체 만들자.
     FHttpRequestRef httpRequest = FHttpModule::Get().CreateRequest();
     // 요청 URL - 서버가 만들어서 알려줌.
-    httpRequest->SetURL(TEXT("https://jsonplaceholder.typicode.com/posts"));
+    httpRequest->SetURL(TEXT("https://jsonplaceholder.typicode.com/photos"));
     // 요청 방식 설정 - 서버에 GET, POST, PUT, DELETE 어떤것으로 해야하는지 알려줌
     httpRequest->SetVerb(TEXT("GET"));
     // 헤더를 설정 
@@ -272,13 +272,28 @@ void AJsonPawn::HttpRequestGet()
         // 응답 오는 곳
         if (bConnectedSuccessfully)
         {
+            //             파싱 처리                   
+            // 직접 사용
+            // 파싱 하기 위해서 구조체나 배열을 만들지 않아도 된다
             UE_LOG(LogTemp, Warning, TEXT("%s"), *Response->GetContentAsString());
             FString jsonString = Response->GetContentAsString();
-            jsonString = FString::Printf(TEXT("{\"data\":%s}"), *jsonString);
+            TSharedRef<TJsonReader<>> jsonReader = TJsonReaderFactory<>::Create(jsonString);
+            TArray<TSharedPtr<FJsonValue>> jsonArray;
+            FJsonSerializer::Deserialize(jsonReader, jsonArray);
 
-            FPostInfoArray info;
+            for (int32 i = 0; i < 100; i++)
+            {
+                TSharedPtr<FJsonObject> jsonObject = jsonArray[i]->AsObject();
+                mainUI->AddDownloadImage(jsonObject->GetStringField(TEXT("url")));
+            }
+
+            // 구조체 사용
+            // jsonString 을 text file 로 저장하자
+
+            //jsonString = FString::Printf(TEXT("{\"data\":%s}"), *jsonString);
+            /*FPostInfoArray info;
             FJsonObjectConverter::JsonObjectStringToUStruct(jsonString, &info);
-            allPost = info.data;
+            allPost = info.data;*/
         }
         else
         {
@@ -328,48 +343,33 @@ void AJsonPawn::HttpRequestPost()
 
 void AJsonPawn::HttpRequestImageDownload()
 {
-    // 서버에게 요청하는 객체 만들자.
+    // 서버에게 요청하는 객체를 만들자.
     FHttpRequestRef httpRequest = FHttpModule::Get().CreateRequest();
-    // 요청 URL - 서버가 만들어서 알려줌.
+    // 요청 URL -> 서버가 만들어서 알려줌
     httpRequest->SetURL(TEXT("https://ssl.pstatic.net/melona/libs/1482/1482857/2e170a50469c9f109ad3_20241202173623747.jpg"));
-    // 요청 방식 설정 - 서버에 GET, POST, PUT, DELETE 어떤것으로 해야하는지 알려줌
+    // 요청 방식 설정 -> 서버에서 Get, Post, Put, Delete 중 어떤 방식으로 요청할지 알려준다.
     httpRequest->SetVerb(TEXT("GET"));
+
     // 서버에서 응답이 오면 호출되는 함수 등록
-    httpRequest->OnProcessRequestComplete().BindLambda([this](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+    httpRequest->OnProcessRequestComplete().BindLambda([this](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully) {
+        // 응답 오는 곳
+        if (bConnectedSuccessfully)
         {
-            // 응답 오는 곳
-            if (bConnectedSuccessfully)
-            {
-                //             파싱 처리                   
-                // 직접 사용
-                // 파싱 하기 위해서 구조체나 배열을 만들지 않아도 된다
-                UE_LOG(LogTemp, Warning, TEXT("%s"), *Response->GetContentAsString());
-                FString jsonString = Response->GetContentAsString();
-                TSharedRef<TJsonReader<>> jsonReader = TJsonReaderFactory<>::Create(jsonString);
-                TArray<TSharedPtr<FJsonValue>> jsonArray;
-                FJsonSerializer::Deserialize(jsonReader, jsonArray);
-
-                for (int32 i = 0; i < 100; i++)
-                {
-                    TSharedPtr<FJsonObject> jsonObject = jsonArray[i]->AsObject();
-                    mainUI->AddDownloadImage(jsonObject->GetStringField(TEXT("url")));
-                }
-
-                // 구조체 사용
-                // jsonString 을 text file 로 저장하자
-                /*FString path = FPaths::ProjectDir() + TEXT("image.jpg");
-                TArray<uint8> array = Response->GetContent();
-                FFileHelper::SaveArrayToFile(array, *path);*/
-            }
-            else
-            {
-                //Response->GetResponseCode() : 200 정상,    400번대, 500번대 오류
-                UE_LOG(LogTemp, Warning, TEXT("통신 실패 : %d"), Response->GetResponseCode());
-            }
-       }
+            // jsonString 을 text file 로 저장하자
+            FString path = FPaths::ProjectDir() + TEXT("image.jpg");
+            TArray<uint8> byteArray = Response->GetContent();
+            FFileHelper::SaveArrayToFile(byteArray, *path);
+        }
+        else
+        {
+            // 통신 실패
+            // Response->GetResponseCode() : 200이면 정상, 400번대면 클라이언트 오류, 500번대면 서버 오류
+            UE_LOG(LogTemp, Warning, TEXT("통신 실패 : %d"), Response->GetResponseCode());
+        }
+        }
     );
 
-    // 요청을 보내자.
+    // 요청을 보내자
     httpRequest->ProcessRequest();
 }
 
