@@ -18,6 +18,9 @@ public:
     UPROPERTY(meta=(BindWidget))
     class UCanvasPanel* mainCanvas;
 
+    UPROPERTY(meta=(BindWidget))
+    class UScrollBox* imageList;
+
     UPROPERTY(EditDefaultsOnly)
     TSubclassOf<class UDownloadImageUI> downloadImageUIFactory;
 

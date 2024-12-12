@@ -16,9 +16,12 @@ void UDownloadImageUI::OnDownloadComplete(UTexture2DDynamic* Texture)
     if (Texture)
     {
         downloadImage->SetBrushFromTextureDynamic(Texture);
+        float ratio = 600.0f / Texture->GetSurfaceWidth(); // 비율을 정해줘서 똑같이 들어가게함
+        downloadImage->SetBrushSize(FVector2D(Texture->GetSurfaceWidth(), Texture->GetSurfaceHeight() * ratio));
+
         // UI가 가지고 있는 Slot 카테고리 옵션을 이용해서 크기 박스를 지정해주자
-        UCanvasPanelSlot* panelSlot = Cast<UCanvasPanelSlot>(Slot);
-        panelSlot->SetSize(FVector2D(Texture->GetSurfaceWidth(), Texture->GetSurfaceHeight()));
+        //UCanvasPanelSlot* panelSlot = Cast<UCanvasPanelSlot>(Slot);
+        //panelSlot->SetSize(FVector2D(Texture->GetSurfaceWidth(), Texture->GetSurfaceHeight()));
     }
     else
     {

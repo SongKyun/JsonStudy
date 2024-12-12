@@ -148,4 +148,7 @@ public:
     
     UPROPERTY()
     class UMainUI* mainUI;
+
+    UFUNCTION(BlueprintCallable)
+    void DownloadImage();
 };
